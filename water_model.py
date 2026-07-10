@@ -230,117 +230,119 @@ def preprocess_image(image_path):
         print(f"Error preprocessing image: {e}")
         return None
 
-# --- 4. Load All Model Artifacts ---
-IMAGE_MODEL_PATH = '/content/drive/MyDrive/project/Fish_img_model_fixed.h5'
-WATER_MODEL_PATH = '/content/drive/MyDrive/Project/models/trained_fish_health_model.joblib'
+if __name__ == '__main__':
+    # --- 4. Load All Model Artifacts ---
+    IMAGE_MODEL_PATH = '/content/drive/MyDrive/project/Fish_img_model_fixed.h5'
+    WATER_MODEL_PATH = '/content/drive/MyDrive/Project/models/trained_fish_health_model.joblib'
 
-print("Loading models...")
-try:
-    image_model = tf.keras.models.load_model(IMAGE_MODEL_PATH)
-    # Use the load_model method from the class (or joblib.load, both work)
-    water_model = FishHealthModel.load_model(WATER_MODEL_PATH)
-    print("All models loaded successfully.")
-    print(f"Loaded water model type: {type(water_model)}")
-    print(f"Water model expects {len(water_model.trained_features)} processed features.")
-except Exception as e:
-    print(f"--- FATAL ERROR LOADING MODELS ---")
-    print(f"Error: {e}")
-    image_model = None
-
-# --- 5. Create The "Supportive" Prediction Function (MODIFIED) ---
-
-def predict_supportive(image_path, raw_water_dict):
-    """
-    Combines predictions using the "Supportive" method.
-    Takes an image path and a DICTIONARY of raw water inputs.
-    """
-
-    if image_model is None or water_model is None:
-        print("Models are not loaded. Cannot predict.")
-        return
-
-    # --- 1. Get Image Prediction (Unchanged) ---
-    processed_image = preprocess_image(image_path)
-    if processed_image is None:
-        return
-
-    image_probs = image_model.predict(processed_image)[0]
-    image_class_index = np.argmax(image_probs)
-    image_prediction = CLASS_LABELS_IMAGE[image_class_index]
-    image_confidence = image_probs[image_class_index]
-
-    # --- 2. Get Water Prediction (SIMPLIFIED) ---
-
+    print("Loading models...")
     try:
-        # Use the class's own predict method
-        water_result = water_model.predict(raw_water_dict)
-        water_prediction = water_result['Predicted Health Status']
-        specific_risks = water_result['Specific Disease Risks']
-
+        image_model = tf.keras.models.load_model(IMAGE_MODEL_PATH)
+        # Use the load_model method from the class (or joblib.load, both work)
+        water_model = FishHealthModel.load_model(WATER_MODEL_PATH)
+        print("All models loaded successfully.")
+        print(f"Loaded water model type: {type(water_model)}")
+        print(f"Water model expects {len(water_model.trained_features)} processed features.")
     except Exception as e:
-        print(f"Error during water model prediction: {e}")
-        return
+        print(f"--- FATAL ERROR LOADING MODELS ---")
+        print(f"Error: {e}")
+        image_model = None
+        water_model = None
 
-    # --- 3. Combine Logically ---
-    final_diagnosis = {
-        "image_prediction": image_prediction,
-        "image_confidence": f"{image_confidence*100:.2f}%",
-        "water_status": water_prediction,
-        "final_assessment": "",
-        "water_based_risks": specific_risks
+    # --- 5. Create The "Supportive" Prediction Function (MODIFIED) ---
+
+    def predict_supportive(image_path, raw_water_dict):
+        """
+        Combines predictions using the "Supportive" method.
+        Takes an image path and a DICTIONARY of raw water inputs.
+        """
+
+        if image_model is None or water_model is None:
+            print("Models are not loaded. Cannot predict.")
+            return
+
+        # --- 1. Get Image Prediction (Unchanged) ---
+        processed_image = preprocess_image(image_path)
+        if processed_image is None:
+            return
+
+        image_probs = image_model.predict(processed_image)[0]
+        image_class_index = np.argmax(image_probs)
+        image_prediction = CLASS_LABELS_IMAGE[image_class_index]
+        image_confidence = image_probs[image_class_index]
+
+        # --- 2. Get Water Prediction (SIMPLIFIED) ---
+
+        try:
+            # Use the class's own predict method
+            water_result = water_model.predict(raw_water_dict)
+            water_prediction = water_result['Predicted Health Status']
+            specific_risks = water_result['Specific Disease Risks']
+
+        except Exception as e:
+            print(f"Error during water model prediction: {e}")
+            return
+
+        # --- 3. Combine Logically ---
+        final_diagnosis = {
+            "image_prediction": image_prediction,
+            "image_confidence": f"{image_confidence*100:.2f}%",
+            "water_status": water_prediction,
+            "final_assessment": "",
+            "water_based_risks": specific_risks
+        }
+
+        is_healthy = "Healthy Fish" in image_prediction
+
+        if is_healthy and water_prediction == 'Stable':
+            final_diagnosis["final_assessment"] = "High Confidence: Fish is healthy and water is stable. Conditions are optimal."
+
+        elif is_healthy and water_prediction == 'At Risk':
+            final_diagnosis["final_assessment"] = "Warning: Fish appears healthy, but water quality is 'At Risk'. Fish is in danger of future illness. Check rule-based risks."
+
+        elif not is_healthy and water_prediction == 'At Risk':
+            final_diagnosis["final_assessment"] = f"High Confidence: Image shows '{image_prediction}', and the 'At Risk' water quality supports this diagnosis."
+
+        elif not is_healthy and water_prediction == 'Stable':
+            final_diagnosis["final_assessment"] = f"Low Confidence: Image shows '{image_prediction}', but water quality is 'Stable'. This may be an isolated case, an early infection, or a misidentification. Please double-check."
+
+        return final_diagnosis
+
+    # --- 6. Example Usage (MODIFIED) ---
+
+    EXAMPLE_IMAGE_PATH = "/content/drive/MyDrive/Project/Freshwater Fish Disease Aquaculture in south asia/Test/Fungal diseases Saprolegniasis/Fungal diseases Saprolegniasis (1).jpeg"
+
+    # --- THIS IS THE FIX ---
+    # Provide the RAW inputs as a DICTIONARY, just like in your notebook
+    # This uses the 'scenario_healthy' from your code
+    RAW_WATER_INPUT_DICT = {
+        'Average Fish Weight (g)': 310, 'Survival Rate (%)': 88, 'Disease Occurrence (Cases)': 4,
+        'Temperature (°C)': 28, 'Dissolved Oxygen (mg/L)': 6.5, 'Turbidity (NTU)': 4,
+        'Ammonia (mg/L)': 0.05, 'Nitrite (mg/L)': 1.2, 'Nitrate (mg/L)': 40,
+        'Oxygenation Interventions': 0, 'Corrective Interventions': 1,
+        'Average Temperature (°C)': 28.5, 'High Temperature (°C)': 32, 'Low Temperature (°C)': 26,
+        'Precipitation (inches)': 0.4, 'Month_Num': 9, 'day': 5, 'hour': 13,
+        'Oxygenation Automatic': 'Yes', 'Corrective Measures': 'Yes',
+        'Thermal Risk Index': 'Moderate', 'Low Oxygen Alert': 'Safe'
     }
 
-    is_healthy = "Healthy Fish" in image_prediction
 
-    if is_healthy and water_prediction == 'Stable':
-        final_diagnosis["final_assessment"] = "High Confidence: Fish is healthy and water is stable. Conditions are optimal."
+    print(f"\n--- Making 'Supportive' Prediction ---")
 
-    elif is_healthy and water_prediction == 'At Risk':
-        final_diagnosis["final_assessment"] = "Warning: Fish appears healthy, but water quality is 'At Risk'. Fish is in danger of future illness. Check rule-based risks."
+    final_result = predict_supportive(
+        EXAMPLE_IMAGE_PATH,
+        RAW_WATER_INPUT_DICT
+    )
 
-    elif not is_healthy and water_prediction == 'At Risk':
-        final_diagnosis["final_assessment"] = f"High Confidence: Image shows '{image_prediction}', and the 'At Risk' water quality supports this diagnosis."
-
-    elif not is_healthy and water_prediction == 'Stable':
-        final_diagnosis["final_assessment"] = f"Low Confidence: Image shows '{image_prediction}', but water quality is 'Stable'. This may be an isolated case, an early infection, or a misidentification. Please double-check."
-
-    return final_diagnosis
-
-# --- 6. Example Usage (MODIFIED) ---
-
-EXAMPLE_IMAGE_PATH = "/content/drive/MyDrive/Project/Freshwater Fish Disease Aquaculture in south asia/Test/Fungal diseases Saprolegniasis/Fungal diseases Saprolegniasis (1).jpeg"
-
-# --- THIS IS THE FIX ---
-# Provide the RAW inputs as a DICTIONARY, just like in your notebook
-# This uses the 'scenario_healthy' from your code
-RAW_WATER_INPUT_DICT = {
-    'Average Fish Weight (g)': 310, 'Survival Rate (%)': 88, 'Disease Occurrence (Cases)': 4,
-    'Temperature (°C)': 28, 'Dissolved Oxygen (mg/L)': 6.5, 'Turbidity (NTU)': 4,
-    'Ammonia (mg/L)': 0.05, 'Nitrite (mg/L)': 1.2, 'Nitrate (mg/L)': 40,
-    'Oxygenation Interventions': 0, 'Corrective Interventions': 1,
-    'Average Temperature (°C)': 28.5, 'High Temperature (°C)': 32, 'Low Temperature (°C)': 26,
-    'Precipitation (inches)': 0.4, 'Month_Num': 9, 'day': 5, 'hour': 13,
-    'Oxygenation Automatic': 'Yes', 'Corrective Measures': 'Yes',
-    'Thermal Risk Index': 'Moderate', 'Low Oxygen Alert': 'Safe'
-}
-
-
-print(f"\n--- Making 'Supportive' Prediction ---")
-
-final_result = predict_supportive(
-    EXAMPLE_IMAGE_PATH,
-    RAW_WATER_INPUT_DICT
-)
-
-if final_result:
-    print("\n--- Dual-Modal Diagnosis ---")
-    print(f"Image Prediction: {final_result['image_prediction']}")
-    print(f"Image Confidence: {final_result['image_confidence']}")
-    print(f"Water Status:     {final_result['water_status']}")
-    print("-------------------------------------------------")
-    print(f"Assessment:       {final_result['final_assessment']}")
-    print("\nSpecific Water-Based Risks:")
-    for disease, risk in final_result['water_based_risks'].items():
-        print(f"  - {disease}: {risk:.2%}")
-else:
-    print("Prediction failed. Please check errors above.")
+    if final_result:
+        print("\n--- Dual-Modal Diagnosis ---")
+        print(f"Image Prediction: {final_result['image_prediction']}")
+        print(f"Image Confidence: {final_result['image_confidence']}")
+        print(f"Water Status:     {final_result['water_status']}")
+        print("-------------------------------------------------")
+        print(f"Assessment:       {final_result['final_assessment']}")
+        print("\nSpecific Water-Based Risks:")
+        for disease, risk in final_result['water_based_risks'].items():
+            print(f"  - {disease}: {risk:.2%}")
+    else:
+        print("Prediction failed. Please check errors above.")
