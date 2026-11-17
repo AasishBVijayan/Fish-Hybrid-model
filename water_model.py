@@ -5,8 +5,7 @@ import pandas as pd  # <-- Make sure pandas is imported
 from tensorflow.keras.preprocessing import image as keras_image
 from tensorflow.keras.applications.resnet50 import preprocess_input as resnet50_preprocess
 
-# --- 1. Define Image Class Labels (CRITICAL) ---
-# List of 7 diseases from your FishImage.ipynb
+
 CLASS_LABELS_IMAGE = [
     'Bacterial Red disease',
     'Bacterial diseases - Aeromoniasis',
@@ -16,10 +15,7 @@ CLASS_LABELS_IMAGE = [
     'Parasitic diseases',
     'Viral diseases White tail disease'
 ]
-# CLASS_LABELS_WATER is no longer needed, your model class handles it.
 
-# --- 2. PASTE YOUR FULL 'class FishHealthModel:' DEFINITION HERE ---
-# (I have pasted the code you just provided)
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
@@ -37,7 +33,7 @@ class FishHealthModel:
         self.scaler = StandardScaler()
         self.label_encoder = LabelEncoder()
         self.trained_features = []
-        self.scaler_features = [] # To store names of scaled columns
+        self.scaler_features = [] 
 
     def train(self, excel_filepath):
         """
@@ -55,7 +51,7 @@ class FishHealthModel:
             print("Please install it by running: pip install openpyxl")
             return
 
-        # --- Columns to Drop (cleaned and leakage-free) ---
+        
         DROP_COLUMNS = [
             'Datetime', 'Month', 'Month_Num', 'month_x', 'month_y',
             'Average Fish Weight (g)', 'Survival Rate (%)', 'Disease Occurrence (Cases)',
@@ -70,7 +66,7 @@ class FishHealthModel:
             print("Available columns:", list(df_clean.columns))
             return
 
-        # Encode target variable
+        
         self.label_encoder.fit(df_clean[TARGET_COLUMN])
         df_clean[TARGET_COLUMN] = self.label_encoder.transform(df_clean[TARGET_COLUMN])
 
@@ -84,7 +80,6 @@ class FishHealthModel:
         # Identify numerical features for scaling
         self.scaler_features = X.select_dtypes(include=np.number).columns.tolist()
 
-        # 🔹 Step 1: Balance the dataset (Upsampling minority class)
         from sklearn.utils import resample
         train_df = pd.concat([X, y], axis=1)
         target_col = 'Health Status'
@@ -183,7 +178,6 @@ class FishHealthModel:
             print("Model is not trained. Please train the model first.")
             return None
 
-        # Prepare input dataframe
         input_df = pd.DataFrame([scenario_data])
         input_df_encoded = pd.get_dummies(input_df)
         input_df_reindexed = input_df_encoded.reindex(columns=self.trained_features, fill_value=0)
@@ -211,7 +205,7 @@ class FishHealthModel:
         }
 
 
-# --- 3. Define Image Preprocessing (Unchanged) ---
+
 def preprocess_image(image_path):
     """
     Loads and preprocesses an image for the ResNet50 model.
@@ -231,14 +225,14 @@ def preprocess_image(image_path):
         return None
 
 if __name__ == '__main__':
-    # --- 4. Load All Model Artifacts ---
+
     IMAGE_MODEL_PATH = '/content/drive/MyDrive/project/Fish_img_model_fixed.h5'
     WATER_MODEL_PATH = '/content/drive/MyDrive/Project/models/trained_fish_health_model.joblib'
 
     print("Loading models...")
     try:
         image_model = tf.keras.models.load_model(IMAGE_MODEL_PATH)
-        # Use the load_model method from the class (or joblib.load, both work)
+    
         water_model = FishHealthModel.load_model(WATER_MODEL_PATH)
         print("All models loaded successfully.")
         print(f"Loaded water model type: {type(water_model)}")
@@ -249,7 +243,6 @@ if __name__ == '__main__':
         image_model = None
         water_model = None
 
-    # --- 5. Create The "Supportive" Prediction Function (MODIFIED) ---
 
     def predict_supportive(image_path, raw_water_dict):
         """
@@ -261,7 +254,6 @@ if __name__ == '__main__':
             print("Models are not loaded. Cannot predict.")
             return
 
-        # --- 1. Get Image Prediction (Unchanged) ---
         processed_image = preprocess_image(image_path)
         if processed_image is None:
             return
@@ -271,10 +263,9 @@ if __name__ == '__main__':
         image_prediction = CLASS_LABELS_IMAGE[image_class_index]
         image_confidence = image_probs[image_class_index]
 
-        # --- 2. Get Water Prediction (SIMPLIFIED) ---
 
         try:
-            # Use the class's own predict method
+          
             water_result = water_model.predict(raw_water_dict)
             water_prediction = water_result['Predicted Health Status']
             specific_risks = water_result['Specific Disease Risks']
@@ -283,7 +274,6 @@ if __name__ == '__main__':
             print(f"Error during water model prediction: {e}")
             return
 
-        # --- 3. Combine Logically ---
         final_diagnosis = {
             "image_prediction": image_prediction,
             "image_confidence": f"{image_confidence*100:.2f}%",
@@ -308,13 +298,11 @@ if __name__ == '__main__':
 
         return final_diagnosis
 
-    # --- 6. Example Usage (MODIFIED) ---
+
 
     EXAMPLE_IMAGE_PATH = "/content/drive/MyDrive/Project/Freshwater Fish Disease Aquaculture in south asia/Test/Fungal diseases Saprolegniasis/Fungal diseases Saprolegniasis (1).jpeg"
 
-    # --- THIS IS THE FIX ---
-    # Provide the RAW inputs as a DICTIONARY, just like in your notebook
-    # This uses the 'scenario_healthy' from your code
+    
     RAW_WATER_INPUT_DICT = {
         'Average Fish Weight (g)': 310, 'Survival Rate (%)': 88, 'Disease Occurrence (Cases)': 4,
         'Temperature (°C)': 28, 'Dissolved Oxygen (mg/L)': 6.5, 'Turbidity (NTU)': 4,
